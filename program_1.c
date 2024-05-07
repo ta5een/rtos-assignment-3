@@ -21,16 +21,21 @@ based on the assignment 3 requirement. Assignment 3
 #include <time.h>
 #include <unistd.h> /* for POSIX API */
 
-typedef struct RR_Params {
-  // add your variables here
+#define OUTPUT_FILE_NAME_LEN 100
 
-} ThreadParams;
+/**
+ * Thread parameters for the Round Robin scheduler.
+ */
+typedef struct rr_params_t {
+  long int time_quantum;
+  char output_file[OUTPUT_FILE_NAME_LEN];
+} thread_params_t;
 
 /**
  * This function calculates Round Robin (RR) with a time quantum of 4, writes
  * waiting time and turn-around time to the RR.
  */
-void *worker1(void *params) {
+void *worker1(thread_params_t *params) {
   // add your code here
   return NULL;
 }
@@ -39,7 +44,7 @@ void *worker1(void *params) {
  * Reads the waiting time and turn-around time through the RR and writes to text
  * file.
  */
-void *worker2() {
+void *worker2(thread_params_t *params) {
   // add your code here
   return NULL;
 }
@@ -47,7 +52,21 @@ void *worker2() {
 /**
  * This main function creates named pipe and threads.
  */
-int main(void) {
+int main(int argc, char *argv[]) {
+  if (argc != 3) {
+    fprintf(stderr, "USAGE: ./out/program-1 <time-quantum> <output-file> \n"
+                    "EXAMPLE: ./out/program-1 4 output.txt\n");
+    return EXIT_FAILURE;
+  }
+
+  thread_params_t params;
+  strncpy(params.output_file, argv[2], OUTPUT_FILE_NAME_LEN);
+  params.time_quantum = strtol(argv[1], NULL, 10);
+  if (params.time_quantum < 1 || errno == ERANGE) {
+    fprintf(stderr, "Invalid time quantum provided (too small or too large)\n");
+    return EXIT_FAILURE;
+  }
+
   /* creating a named pipe(RR) with read/write permission */
   // add your code
 
