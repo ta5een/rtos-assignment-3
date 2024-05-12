@@ -30,6 +30,11 @@ based on the assignment 3 requirement. Assignment 3
 /** The pipe channel to write data to. */
 #define PIPE_WRITE 1
 
+/* --- Global variables --- */
+
+int num_threads = 2; // two threads, one for `worker1` and one for `worker2`
+pthread_attr_t attr;
+
 /* --- Structs --- */
 
 /**
@@ -62,11 +67,12 @@ void *worker2(void *params);
  */
 int main(int argc, char *argv[]) {
   if (argc != 3) {
-    fprintf(stderr, "USAGE: %s <time-quantum> <output-file> \n", argv[0]);
+    fprintf(stderr, "USAGE: %s time_quantum output_file \n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  thread_params_t params;
+  pthread_t tids[num_threads]; // two threads
+  thread_params_t params;      // thread parameters
 
   // Create a named pipe (RR) with read/write permission
   int pipe_result = pipe(params.pipe_file);
@@ -85,13 +91,31 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  /* create threads */
-  // add your code
+  // Create first thread for `worker1`
+  if (pthread_create(&(tids[0]), &attr, &worker1, (void *)(&params)) != 0) {
+    perror("Failed to create first thread");
+    exit(EXIT_FAILURE);
+  }
 
-  /* wait for the thread to exit */
-  // add your code
+  // Create second thread for `worker1`
+  if (pthread_create(&(tids[1]), &attr, &worker2, (void *)(&params)) != 0) {
+    perror("Failed to create second thread");
+    exit(EXIT_FAILURE);
+  }
 
-  return 0;
+  // Wait for all threads to finish
+  // Inspired by the example found in `man pthread_create`
+  int thread_join_res, tnum;
+  for (tnum = 0; tnum < num_threads; tnum++) {
+    thread_join_res = pthread_join(tids[tnum], NULL);
+    if (thread_join_res != 0) {
+      errno = thread_join_res;
+      perror("Failed to join thread");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  return EXIT_SUCCESS;
 }
 
 void *worker1(void *params) {
