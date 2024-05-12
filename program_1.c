@@ -21,12 +21,18 @@ based on the assignment 3 requirement. Assignment 3
 #include <time.h>
 #include <unistd.h> /* for POSIX API */
 
+/** The maximum string length of the output file name. */
 #define OUTPUT_FILE_NAME_LEN 100
+/** The pipe channel to read data from. */
+#define PIPE_READ 0
+/** The pipe channel to write data to. */
+#define PIPE_WRITE 1
 
 /**
  * Thread parameters for the Round Robin scheduler.
  */
 typedef struct rr_params_t {
+  int pipe_file[2];
   long int time_quantum;
   char output_file[OUTPUT_FILE_NAME_LEN];
 } thread_params_t;
@@ -54,24 +60,28 @@ void *worker2(thread_params_t *params) {
  */
 int main(int argc, char *argv[]) {
   if (argc != 3) {
-    fprintf(stderr, "USAGE: ./out/program-1 <time-quantum> <output-file> \n"
-                    "EXAMPLE: ./out/program-1 4 output.txt\n");
+    fprintf(stderr, "USAGE: %s <time-quantum> <output-file> \n", argv[0]);
     return EXIT_FAILURE;
   }
 
   thread_params_t params;
-  strncpy(params.output_file, argv[2], OUTPUT_FILE_NAME_LEN);
-  params.time_quantum = strtol(argv[1], NULL, 10);
-  if (params.time_quantum < 1 || errno == ERANGE) {
-    fprintf(stderr, "Invalid time quantum provided (too small or too large)\n");
-    return EXIT_FAILURE;
+
+  // Create a named pipe (RR) with read/write permission
+  int pipe_result = pipe(params.pipe_file);
+  if (pipe_result < 0) {
+    perror("Failed to create pipe");
+    exit(EXIT_FAILURE);
   }
 
-  /* creating a named pipe(RR) with read/write permission */
-  // add your code
+  // Initialize output file parameter
+  strncpy(params.output_file, argv[2], OUTPUT_FILE_NAME_LEN);
 
-  /* initialize the parameters */
-  // add your code
+  // Initialize time quantum parameter with bound-checking
+  params.time_quantum = strtol(argv[1], NULL, 10);
+  if (params.time_quantum < 1 || errno == ERANGE) {
+    perror("Invalid time quantum provided");
+    return EXIT_FAILURE;
+  }
 
   /* create threads */
   // add your code
