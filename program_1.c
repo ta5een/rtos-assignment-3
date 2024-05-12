@@ -21,12 +21,16 @@ based on the assignment 3 requirement. Assignment 3
 #include <time.h>
 #include <unistd.h> /* for POSIX API */
 
+/* --- Constants --- */
+
 /** The maximum string length of the output file name. */
 #define OUTPUT_FILE_NAME_LEN 100
 /** The pipe channel to read data from. */
 #define PIPE_READ 0
 /** The pipe channel to write data to. */
 #define PIPE_WRITE 1
+
+/* --- Structs --- */
 
 /**
  * Thread parameters for the Round Robin scheduler.
@@ -37,23 +41,21 @@ typedef struct rr_params_t {
   char output_file[OUTPUT_FILE_NAME_LEN];
 } thread_params_t;
 
+/* --- Prototypes --- */
+
 /**
  * This function calculates Round Robin (RR) with a time quantum of 4, writes
  * waiting time and turn-around time to the FIFO.
  */
-void *worker1(thread_params_t *params) {
-  // add your code here
-  return NULL;
-}
+void *worker1(void *params);
 
 /**
  * Reads the waiting time and turn-around time through the FIFO and writes to
  * text file.
  */
-void *worker2(thread_params_t *params) {
-  // add your code here
-  return NULL;
-}
+void *worker2(void *params);
+
+/* --- Main code -- */
 
 /**
  * This main function creates named pipe and threads.
@@ -90,4 +92,14 @@ int main(int argc, char *argv[]) {
   // add your code
 
   return 0;
+}
+
+void *worker1(void *params) {
+  // add your code here
+  return NULL;
+}
+
+void *worker2(void *params) {
+  // add your code here
+  return NULL;
 }
