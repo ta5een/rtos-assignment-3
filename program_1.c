@@ -33,7 +33,7 @@ typedef struct rr_params_t {
 
 /**
  * This function calculates Round Robin (RR) with a time quantum of 4, writes
- * waiting time and turn-around time to the RR.
+ * waiting time and turn-around time to the FIFO.
  */
 void *worker1(thread_params_t *params) {
   // add your code here
@@ -41,8 +41,8 @@ void *worker1(thread_params_t *params) {
 }
 
 /**
- * Reads the waiting time and turn-around time through the RR and writes to text
- * file.
+ * Reads the waiting time and turn-around time through the FIFO and writes to
+ * text file.
  */
 void *worker2(thread_params_t *params) {
   // add your code here
