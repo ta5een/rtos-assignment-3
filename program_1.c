@@ -151,8 +151,25 @@ int main(int argc, char *argv[]) {
   return EXIT_SUCCESS;
 }
 
+int sort_by_arrive_time(const void *a, const void *b) {
+  return ((rr_input_data_t *)a)->arrival_time -
+         ((rr_input_data_t *)b)->arrival_time;
+}
+
 void *worker1(void *params) {
   thread_params_t *p = params;
+
+#if DEBUG
+  printf("ID\tArrival\tBurst\n");
+  for (int i = 0; i < NUM_RR_PROCESSES; i++) {
+    printf("%d\t%d\t%d\n", i + 1, p->rr_input_data[i].arrival_time,
+           p->rr_input_data[i].burst_time);
+  }
+#endif
+
+  // stdlib function to sort the input data array by the arrival time.
+  qsort(p->rr_input_data, NUM_RR_PROCESSES, sizeof(rr_input_data_t),
+        sort_by_arrive_time);
 
 #if DEBUG
   printf("ID\tArrival\tBurst\n");
