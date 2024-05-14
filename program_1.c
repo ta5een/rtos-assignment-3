@@ -48,6 +48,7 @@ pthread_attr_t attr;
  * Input data for each process.
  */
 typedef struct rr_input_data_t {
+  int __pid;
   /** When does the process arrive (in milliseconds)? */
   int arrival_time;
   /** CPU cycle count for this process to execute (in milliseconds). */
@@ -94,13 +95,13 @@ int main(int argc, char *argv[]) {
 
   // Initialize input data for Round Robin scheduling simulation
   rr_input_data_t rr_input_data[NUM_RR_PROCESSES] = {
-      {.arrival_time = 8, .burst_time = 10},
-      {.arrival_time = 10, .burst_time = 3},
-      {.arrival_time = 14, .burst_time = 7},
-      {.arrival_time = 9, .burst_time = 5},
-      {.arrival_time = 16, .burst_time = 4},
-      {.arrival_time = 21, .burst_time = 6},
-      {.arrival_time = 26, .burst_time = 2},
+      {.__pid = 1, .arrival_time = 8, .burst_time = 10},
+      {.__pid = 2, .arrival_time = 10, .burst_time = 3},
+      {.__pid = 3, .arrival_time = 14, .burst_time = 7},
+      {.__pid = 4, .arrival_time = 9, .burst_time = 5},
+      {.__pid = 5, .arrival_time = 16, .burst_time = 4},
+      {.__pid = 6, .arrival_time = 21, .burst_time = 6},
+      {.__pid = 7, .arrival_time = 26, .burst_time = 2},
   };
 
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
