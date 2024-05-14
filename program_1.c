@@ -224,22 +224,23 @@ void *worker1(void *params) {
   //       sort_by_arrive_time);
 
   int cycle = 0;
-  int curr_inc_quantum = 0;
-  // int done = 0;
+  int curr_process_cycle_deadline = 0;
+  int done = false;
 
   rr_queue_t queue;
-  rr_queue_init(&queue);
   rr_input_data_t *curr_process = NULL;
 
-  while (true) {
-    rr_queue_print(&queue);
-    printf("-> Cycle: %d\n", cycle);
-    printf("-> Inc Quantum: %d\n", curr_inc_quantum);
-    printf("PID\tArrival\tBurst\n");
+  rr_queue_init(&queue);
+
+  do {
+    printf(":: CYCLE %d\n", cycle);
 
     // Check if there's any new processes right now
+    printf("Process\tArrival\tBurst\n");
+    done = true;
     for (int i = 0; i < NUM_RR_PROCESSES; i++) {
       rr_input_data_t *curr = &p->rr_input_data[i];
+      done = done && curr->burst_time == 0;
       printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
       if (curr->arrival_time == cycle) {
         printf("\t-> ARRIVE\n");
@@ -249,109 +250,51 @@ void *worker1(void *params) {
       }
     }
 
-    // TODO: Queue approach doesn't work!
-    printf("-> Current Process is NULL? %d", curr_process == NULL);
-    if (curr_process != NULL) {
-    handle_curr_process:
-      if (curr_inc_quantum + 1 < p->time_quantum) {
-        printf("\t/\tDecrementing P%d", curr_process->__pid);
-        curr_inc_quantum++;
-        // TODO: Constrain decrement
-        curr_process->burst_time--;
-      } else {
-        printf("\t/\tDecrementing P%d", curr_process->__pid);
-        curr_process->burst_time--;
-        // printf("\t/\tEnqueuing P%d for remaining %d", curr_process->__pid,
-        //        curr_process->burst_time);
-        curr_inc_quantum = 0;
-        // rr_queue_enqueue(&queue, curr_process);
-        curr_process = NULL;
+    printf(":: ");
+    if (cycle >= curr_process_cycle_deadline || curr_process == NULL) {
+      if (curr_process != NULL && curr_process->burst_time > 0) {
+        // Push back to the queue
+        printf("ENQUEUE(P%d)\t", curr_process->__pid);
+        rr_queue_enqueue(&queue, curr_process);
       }
-    } else {
       curr_process = rr_queue_dequeue(&queue);
-      if (curr_process != NULL) {
-        goto handle_curr_process;
+      if (curr_process == NULL) {
+        printf("EMPTY\t");
       } else {
-        printf("\t/\tWaiting...");
+        curr_process_cycle_deadline = cycle + p->time_quantum;
+        printf("DEQUEUE(P%d)\t", curr_process->__pid);
+        printf("DEADLINE(%d)\t", curr_process_cycle_deadline);
       }
     }
-    printf("\n");
 
-    /*
+    // We may or may not have new processes in queue
     if (curr_process != NULL) {
-      if (curr_inc_quantum == p->time_quantum) {
-        curr_inc_quantum = 0;
-        // This process still needs to be processed -- enqueue this item
-        printf("-> Enqueuing P%d for remaining %d\n", curr_process->__pid,
-               curr_process->burst_time);
-        rr_queue_enqueue(&queue, curr_process);
+      printf("CURRENT(P%d)\t", curr_process->__pid);
+      // Decrement the burst time per loop until it doesn't exceed the quantum
+      int new_burst_time = curr_process->burst_time - 1;
+      printf("%d < %d ? %d\t", cycle, curr_process_cycle_deadline,
+             cycle < curr_process_cycle_deadline);
+      if (cycle < curr_process_cycle_deadline && new_burst_time > 0) {
+        printf("DEC(P%d) = %d\t", curr_process->__pid, new_burst_time);
+        curr_process->burst_time--;
+      } else if (new_burst_time <= 0) {
+        curr_process->burst_time = 0;
+        printf("EARLY_DEADLINE(P%d, %d)", curr_process->__pid, cycle);
+        curr_process_cycle_deadline = cycle + 1;
       } else {
-        curr_inc_quantum++;
-        // Continue using the current process
-        int subtracted_burst_time = curr_process->burst_time - 1;
-        if (subtracted_burst_time <= 0) {
-          // This process is now finished
-          printf("-> Completed P%d\n", curr_process->__pid);
-          curr_process->burst_time = 0;
-          curr_process = NULL;
+        curr_process = rr_queue_dequeue(&queue);
+        if (curr_process == NULL) {
+          printf("2_EMPTY\t");
         } else {
-          // Continue processing
-          curr_process->burst_time = subtracted_burst_time;
+          curr_process_cycle_deadline = cycle + p->time_quantum;
+          printf("2_DEQUEUE(P%d)\t", curr_process->__pid);
+          printf("2_DEADLINE(%d)\t", curr_process_cycle_deadline);
         }
       }
-    } else {
-      // Dequeue next available process
-      rr_input_data_t *next_process = rr_queue_dequeue(&queue);
-      if (next_process != NULL) {
-        printf("-> Dequeued P%d\n", next_process->__pid);
-        curr_process = next_process;
-      }
-    } */
-
-    rr_queue_print(&queue);
-    printf("---------------------\n");
-
-    // curr_inc_quantum++;
-    // curr_inc_quantum = curr_inc_quantum % p->time_quantum;
-    cycle++;
-    sleep(2);
-  }
-
-  /*
-  do {
-    printf("-> Cycle: %d\n", cycle);
-    printf("PID\tArrival\tBurst\n");
-    for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-      rr_input_data_t *curr = &p->rr_input_data[i];
-      printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
-      if (curr->arrival_time == cycle) {
-        printf("\t-> ENQUEUE\n");
-        rr_queue_enqueue(&queue, curr);
-      } else {
-        printf("\n");
-      }
     }
 
-    rr_queue_print(&queue);
-
-    printf("-> Dequeueing...\n");
-    can_dequeue_next_process = false;
-    rr_input_data_t *data = rr_queue_dequeue(&queue);
-    if (data != NULL) {
-      printf("-> P%d dequeued\n", data->__pid);
-      int subtracted_burst_time = data->burst_time - 1;
-      if (subtracted_burst_time <= 0) {
-        printf("-> Completed P%d\n", data->__pid);
-        data->burst_time = 0;
-      } else if (subtracted_burst_time > 0) {
-        printf("-> Enqueing P%d again\n", data->__pid);
-        data->burst_time = subtracted_burst_time;
-        rr_queue_enqueue(&queue, data);
-      }
-    } else {
-      printf("-> Nothing to process yet\n");
-    }
-
+    printf("\n");
+    printf(":: DEADLINE %d\n", curr_process_cycle_deadline);
     rr_queue_print(&queue);
 
     printf("---------------------\n");
@@ -359,7 +302,6 @@ void *worker1(void *params) {
     cycle++;
     sleep(1);
   } while (!done);
-  */
 
   return NULL;
 }
