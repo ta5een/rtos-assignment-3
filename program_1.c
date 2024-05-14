@@ -152,33 +152,214 @@ int main(int argc, char *argv[]) {
   return EXIT_SUCCESS;
 }
 
-int sort_by_arrive_time(const void *a, const void *b) {
-  return ((rr_input_data_t *)a)->arrival_time -
-         ((rr_input_data_t *)b)->arrival_time;
+typedef struct rr_queue_node_t {
+  rr_input_data_t *data;
+  struct rr_queue_node_t *next;
+} rr_queue_node_t;
+
+typedef struct rr_queue_t {
+  rr_queue_node_t *first;
+  rr_queue_node_t *last;
+} rr_queue_t;
+
+void rr_queue_init(rr_queue_t *queue) {
+  queue->first = NULL;
+  queue->last = NULL;
+}
+
+int rr_queue_is_empty(rr_queue_t *queue) {
+  return queue->first == NULL && queue->last == NULL;
+}
+
+void rr_queue_enqueue(rr_queue_t *queue, rr_input_data_t *data) {
+  rr_queue_node_t *new_node =
+      (rr_queue_node_t *)malloc(sizeof(rr_queue_node_t));
+  new_node->data = data;
+  new_node->next = NULL;
+
+  if (rr_queue_is_empty(queue)) {
+    queue->last = new_node;
+    queue->first = queue->last;
+  } else {
+    queue->last->next = new_node;
+    queue->last = new_node;
+  }
+}
+
+rr_input_data_t *rr_queue_dequeue(rr_queue_t *queue) {
+  if (rr_queue_is_empty(queue)) {
+    return NULL;
+  }
+
+  rr_queue_node_t *node_to_remove = queue->first;
+  rr_input_data_t *data = node_to_remove->data;
+
+  if (queue->first == queue->last) {
+    // If there is only one node left, unset first and last nodes
+    queue->last = NULL;
+    queue->first = NULL;
+  } else {
+    // Otherwise, set the first node to the second node (i.e. shift the nodes)
+    queue->first = queue->first->next;
+  }
+
+  free(node_to_remove);
+  return data;
+}
+
+void rr_queue_print(rr_queue_t *queue) {
+  rr_queue_node_t *peek_node = queue->first;
+  while (peek_node != NULL) {
+    printf("P%d -> ", peek_node->data->__pid);
+    peek_node = peek_node->next;
+  }
+  printf("*\n");
 }
 
 void *worker1(void *params) {
   thread_params_t *p = params;
 
-#if DEBUG
-  printf("ID\tArrival\tBurst\n");
-  for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-    printf("%d\t%d\t%d\n", i + 1, p->rr_input_data[i].arrival_time,
-           p->rr_input_data[i].burst_time);
-  }
-#endif
+  // // stdlib function to sort the input data array by the arrival time.
+  // qsort(p->rr_input_data, NUM_RR_PROCESSES, sizeof(rr_input_data_t),
+  //       sort_by_arrive_time);
 
-  // stdlib function to sort the input data array by the arrival time.
-  qsort(p->rr_input_data, NUM_RR_PROCESSES, sizeof(rr_input_data_t),
-        sort_by_arrive_time);
+  int cycle = 0;
+  int curr_inc_quantum = 0;
+  // int done = 0;
 
-#if DEBUG
-  printf("ID\tArrival\tBurst\n");
-  for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-    printf("%d\t%d\t%d\n", i + 1, p->rr_input_data[i].arrival_time,
-           p->rr_input_data[i].burst_time);
+  rr_queue_t queue;
+  rr_queue_init(&queue);
+  rr_input_data_t *curr_process = NULL;
+
+  while (true) {
+    rr_queue_print(&queue);
+    printf("-> Cycle: %d\n", cycle);
+    printf("-> Inc Quantum: %d\n", curr_inc_quantum);
+    printf("PID\tArrival\tBurst\n");
+
+    // Check if there's any new processes right now
+    for (int i = 0; i < NUM_RR_PROCESSES; i++) {
+      rr_input_data_t *curr = &p->rr_input_data[i];
+      printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
+      if (curr->arrival_time == cycle) {
+        printf("\t-> ARRIVE\n");
+        rr_queue_enqueue(&queue, curr);
+      } else {
+        printf("\n");
+      }
+    }
+
+    // TODO: Queue approach doesn't work!
+    printf("-> Current Process is NULL? %d", curr_process == NULL);
+    if (curr_process != NULL) {
+    handle_curr_process:
+      if (curr_inc_quantum + 1 < p->time_quantum) {
+        printf("\t/\tDecrementing P%d", curr_process->__pid);
+        curr_inc_quantum++;
+        // TODO: Constrain decrement
+        curr_process->burst_time--;
+      } else {
+        printf("\t/\tDecrementing P%d", curr_process->__pid);
+        curr_process->burst_time--;
+        // printf("\t/\tEnqueuing P%d for remaining %d", curr_process->__pid,
+        //        curr_process->burst_time);
+        curr_inc_quantum = 0;
+        // rr_queue_enqueue(&queue, curr_process);
+        curr_process = NULL;
+      }
+    } else {
+      curr_process = rr_queue_dequeue(&queue);
+      if (curr_process != NULL) {
+        goto handle_curr_process;
+      } else {
+        printf("\t/\tWaiting...");
+      }
+    }
+    printf("\n");
+
+    /*
+    if (curr_process != NULL) {
+      if (curr_inc_quantum == p->time_quantum) {
+        curr_inc_quantum = 0;
+        // This process still needs to be processed -- enqueue this item
+        printf("-> Enqueuing P%d for remaining %d\n", curr_process->__pid,
+               curr_process->burst_time);
+        rr_queue_enqueue(&queue, curr_process);
+      } else {
+        curr_inc_quantum++;
+        // Continue using the current process
+        int subtracted_burst_time = curr_process->burst_time - 1;
+        if (subtracted_burst_time <= 0) {
+          // This process is now finished
+          printf("-> Completed P%d\n", curr_process->__pid);
+          curr_process->burst_time = 0;
+          curr_process = NULL;
+        } else {
+          // Continue processing
+          curr_process->burst_time = subtracted_burst_time;
+        }
+      }
+    } else {
+      // Dequeue next available process
+      rr_input_data_t *next_process = rr_queue_dequeue(&queue);
+      if (next_process != NULL) {
+        printf("-> Dequeued P%d\n", next_process->__pid);
+        curr_process = next_process;
+      }
+    } */
+
+    rr_queue_print(&queue);
+    printf("---------------------\n");
+
+    // curr_inc_quantum++;
+    // curr_inc_quantum = curr_inc_quantum % p->time_quantum;
+    cycle++;
+    sleep(2);
   }
-#endif
+
+  /*
+  do {
+    printf("-> Cycle: %d\n", cycle);
+    printf("PID\tArrival\tBurst\n");
+    for (int i = 0; i < NUM_RR_PROCESSES; i++) {
+      rr_input_data_t *curr = &p->rr_input_data[i];
+      printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
+      if (curr->arrival_time == cycle) {
+        printf("\t-> ENQUEUE\n");
+        rr_queue_enqueue(&queue, curr);
+      } else {
+        printf("\n");
+      }
+    }
+
+    rr_queue_print(&queue);
+
+    printf("-> Dequeueing...\n");
+    can_dequeue_next_process = false;
+    rr_input_data_t *data = rr_queue_dequeue(&queue);
+    if (data != NULL) {
+      printf("-> P%d dequeued\n", data->__pid);
+      int subtracted_burst_time = data->burst_time - 1;
+      if (subtracted_burst_time <= 0) {
+        printf("-> Completed P%d\n", data->__pid);
+        data->burst_time = 0;
+      } else if (subtracted_burst_time > 0) {
+        printf("-> Enqueing P%d again\n", data->__pid);
+        data->burst_time = subtracted_burst_time;
+        rr_queue_enqueue(&queue, data);
+      }
+    } else {
+      printf("-> Nothing to process yet\n");
+    }
+
+    rr_queue_print(&queue);
+
+    printf("---------------------\n");
+
+    cycle++;
+    sleep(1);
+  } while (!done);
+  */
 
   return NULL;
 }
