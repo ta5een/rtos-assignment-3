@@ -144,16 +144,6 @@ typedef struct rr_queue_t {
 
 /* --- Prototypes --- */
 
-void rr_process_init(rr_process_t *p, int pid, int at, int bt) {
-  p->pid = pid;
-  p->arrival_time = at;
-  p->burst_time = bt;
-  p->exec_time = 0;
-  p->wait_time = 0;
-  p->completion_time = 0;
-  p->last_wait_start = 0;
-}
-
 /**
  * This function calculates Round Robin (RR) with a time quantum of 4, writes
  * waiting time and turn-around time to the FIFO.
@@ -165,6 +155,11 @@ void *worker1(void *params);
  * text file.
  */
 void *worker2(void *params);
+
+/**
+ * Initializes a process with the given PID, arrival time and burst time.
+ */
+void rr_process_init(rr_process_t *p, int pid, int at, int bt);
 
 /**
  * Initializes the queue.
@@ -368,6 +363,16 @@ void *worker2(void *params) {
 }
 
 /* --- RR Queue Methods --- */
+
+void rr_process_init(rr_process_t *p, int pid, int at, int bt) {
+  p->pid = pid;
+  p->arrival_time = at;
+  p->burst_time = bt;
+  p->exec_time = 0;
+  p->wait_time = 0;
+  p->completion_time = 0;
+  p->last_wait_start = 0;
+}
 
 void rr_queue_init(rr_queue_t *queue) {
   queue->first = NULL;
