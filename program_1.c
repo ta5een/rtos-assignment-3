@@ -48,8 +48,10 @@ pthread_attr_t attr;
  * Input data for each process.
  */
 typedef struct rr_process_t {
-  // TODO: Only for debug purposes, this may be removed.
-  int __pid;
+  /**
+   * Unique identifier for this process.
+   */
+  int pid;
   /**
    * When does the process arrive (in milliseconds)?
    */
@@ -96,7 +98,7 @@ typedef struct rr_queue_node_t {
 } rr_queue_node_t;
 
 /**
- * FIFO data collection type used to queue processes in the RR scheduler.
+ * Data collection type used to queue processes in the RR scheduler.
  *
  * Essentially, this is a linked list, where the first node represents the
  * oldest item added to the queue (i.e. the first to arrive), and the last node
@@ -118,6 +120,13 @@ typedef struct rr_queue_t {
 } rr_queue_t;
 
 /* --- Prototypes --- */
+
+void rr_process_init(rr_process_t *p, int pid, int at, int bt) {
+  p->pid = pid;
+  p->arrival_time = at;
+  p->burst_time = bt;
+  p->exec_time = 0;
+}
 
 /**
  * This function calculates Round Robin (RR) with a time quantum of 4, writes
@@ -177,16 +186,15 @@ int main(int argc, char *argv[]) {
   pthread_t tids[NUM_THREADS]; // two threads
   thread_params_t params;      // thread parameters
 
-  // Initialize input data for Round Robin scheduling simulation
-  rr_process_t processes[NUM_RR_PROCESSES] = {
-      {.__pid = 1, .arrival_time = 8, .burst_time = 10, .exec_time = 0},
-      {.__pid = 2, .arrival_time = 10, .burst_time = 3, .exec_time = 0},
-      {.__pid = 3, .arrival_time = 14, .burst_time = 7, .exec_time = 0},
-      {.__pid = 4, .arrival_time = 9, .burst_time = 5, .exec_time = 0},
-      {.__pid = 5, .arrival_time = 16, .burst_time = 4, .exec_time = 0},
-      {.__pid = 6, .arrival_time = 21, .burst_time = 6, .exec_time = 0},
-      {.__pid = 7, .arrival_time = 26, .burst_time = 2, .exec_time = 0},
-  };
+  // Initialize all processes for Round Robin scheduling simulation
+  rr_process_t processes[NUM_RR_PROCESSES];
+  rr_process_init(&processes[0], 1, 8, 10);
+  rr_process_init(&processes[1], 2, 10, 3);
+  rr_process_init(&processes[2], 3, 14, 7);
+  rr_process_init(&processes[3], 4, 9, 5);
+  rr_process_init(&processes[4], 5, 16, 4);
+  rr_process_init(&processes[5], 6, 21, 6);
+  rr_process_init(&processes[6], 7, 26, 2);
 
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
     params.processes[i] = processes[i];
@@ -255,7 +263,7 @@ void *worker1(void *params) {
       rr_process_t *curr_process = &p->processes[i];
       done = done && curr_process->exec_time == curr_process->burst_time;
       if (curr_process->arrival_time == cycle) {
-        printf("-> ARRIVE(P%d)\n", curr_process->__pid);
+        printf("-> ARRIVE(P%d)\n", curr_process->pid);
         rr_queue_enqueue(&queue, curr_process);
       }
     }
@@ -273,25 +281,24 @@ void *worker1(void *params) {
 
     if (curr_process != NULL) {
       printf("-> DEADLINE(%d)\n", deadline);
-      printf("[ P%d\t: %d\t: %d\t: %d\t]\n", curr_process->__pid,
+      printf("[ P%d\t: %d\t: %d\t: %d\t]\n", curr_process->pid,
              curr_process->arrival_time, curr_process->burst_time,
              curr_process->exec_time);
 
       // Simulate an execution cycle for this process
       curr_process->exec_time++;
-      printf("-> EXEC(P%d, %d)\n", curr_process->__pid,
-             curr_process->exec_time);
+      printf("-> EXEC(P%d, %d)\n", curr_process->pid, curr_process->exec_time);
 
       // Check if the process should be retired or enqueued
       if (curr_process->exec_time == curr_process->burst_time) {
         // This process is now completed, it can now be retired
-        printf("-> RETIRE(P%d, %d)\n", curr_process->__pid,
+        printf("-> RETIRE(P%d, %d)\n", curr_process->pid,
                curr_process->exec_time);
         curr_process = NULL;
       } else if (cycle + 1 == deadline) {
         // This is the last cycle to execute this process, it should be enqueued
         // to be completed at a later time
-        printf("-> ENQUEUE(P%d)\n", curr_process->__pid);
+        printf("-> ENQUEUE(P%d)\n", curr_process->pid);
         rr_queue_enqueue(&queue, curr_process);
         curr_process = NULL;
       }
@@ -364,7 +371,7 @@ void rr_queue_print(rr_queue_t *queue) {
   rr_queue_node_t *peek_node = queue->first;
   while (peek_node != NULL) {
     rr_process_t *curr_process = peek_node->process;
-    printf("| P%d\t| %d\t| %d\t| %d\t|\n", curr_process->__pid,
+    printf("| P%d\t| %d\t| %d\t| %d\t|\n", curr_process->pid,
            curr_process->arrival_time, curr_process->burst_time,
            curr_process->exec_time);
     peek_node = peek_node->next;
