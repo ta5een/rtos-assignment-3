@@ -276,7 +276,9 @@ void *worker1(void *params) {
   rr_process_t *curr_process = NULL;
 
   do {
+#if DEBUG
     printf("-> CYCLE %d\n", cycle);
+#endif
 
     // Check if any processes arrives at this cycle and add it to the queue
     done = true;
@@ -285,7 +287,9 @@ void *worker1(void *params) {
       int is_process_done = proc->exec_time == proc->burst_time;
       done = done && is_process_done;
       if (proc->arrival_time == cycle) {
+#if DEBUG
         printf("-> ARRIVE(P%d, #%d)\n", proc->pid, cycle);
+#endif
         proc->last_wait_start = cycle;
         rr_queue_enqueue(&queue, proc);
       }
@@ -298,52 +302,62 @@ void *worker1(void *params) {
       if (curr_process != NULL) {
         // Bump the deadline to a maximum of current cycle + time quantum
         deadline = cycle + p->time_quantum;
-        // printf("-> DEADLINE(%d)\n", deadline);
-
         int wait_time = (cycle - curr_process->last_wait_start);
         int acc_wait_time = curr_process->wait_time + wait_time;
+#if DEBUG
         printf("-> WT(P%d, %d + %d = %d)\n", curr_process->pid,
                curr_process->wait_time, wait_time, acc_wait_time);
+#endif
         curr_process->wait_time = acc_wait_time;
       }
     }
 
     if (curr_process != NULL) {
+#if DEBUG
       printf("-> DEADLINE(%d)\n", deadline);
       printf("[ P%d\t: %d\t: %d\t: %d\t: %d\t: %d\t: %d\t]\n",
              curr_process->pid, curr_process->arrival_time,
              curr_process->burst_time, curr_process->exec_time,
              curr_process->last_wait_start, curr_process->wait_time,
              curr_process->completion_time);
+#endif
 
       // Simulate an execution cycle for this process
       curr_process->exec_time++;
+#if DEBUG
       printf("-> EXEC(P%d, %d)\n", curr_process->pid, curr_process->exec_time);
+#endif
 
       // Check if the process should be retired or enqueued
       if (curr_process->exec_time == curr_process->burst_time) {
         // This process is now completed, it can now be retired
+#if DEBUG
         printf("-> RETIRE(P%d, %d)\n", curr_process->pid,
                curr_process->exec_time);
+#endif
         curr_process->completion_time = cycle + 1;
+#if DEBUG
         printf("-> COMPLETE(P%d, %d)\n", curr_process->pid,
                curr_process->completion_time);
+#endif
         curr_process = NULL;
       } else if (cycle + 1 == deadline) {
+#if DEBUG
+        printf("-> ENQUEUE(P%d)\n", curr_process->pid);
+#endif
         // This is the last cycle to execute this process, it should be enqueued
         // to be completed at a later time
-        printf("-> ENQUEUE(P%d)\n", curr_process->pid);
         rr_queue_enqueue(&queue, curr_process);
         curr_process->last_wait_start = cycle + 1;
         curr_process = NULL;
       }
     }
 
+#if DEBUG
     rr_queue_print(&queue);
-
     printf("=================================\n");
+#endif
     cycle++;
-    // sleep(1);
   } while (!done);
 
   printf("| Proc\t| Arriv\t| Burst\t| Exec\t| LWS\t| WT\t| CT\t|\n");
