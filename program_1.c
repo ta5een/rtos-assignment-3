@@ -31,10 +31,8 @@ based on the assignment 3 requirement. Assignment 3
 /** Number of processes to simulate in Round Robin scheduling. */
 #define NUM_RR_PROCESSES 7
 
-/** The pipe channel to read data from. */
-#define PIPE_READ 0
-/** The pipe channel to write data to. */
-#define PIPE_WRITE 1
+/** The name of the FIFO. */
+#define FIFO_NAME "/tmp/rr-fifo"
 /** The maximum string length of the output file name. */
 #define OUTPUT_FILE_NAME_LEN 100
 
@@ -93,7 +91,6 @@ typedef struct rr_process_t {
  * Thread parameters for the Round Robin (RR) scheduler.
  */
 typedef struct thread_params_t {
-  int pipe_file[2];
   long int time_quantum;
   rr_process_t processes[NUM_RR_PROCESSES];
   char output_file[OUTPUT_FILE_NAME_LEN];
@@ -221,10 +218,10 @@ int main(int argc, char *argv[]) {
     params.processes[i] = processes[i];
   }
 
-  // Create a named pipe (RR) with read/write permission
-  int pipe_result = pipe(params.pipe_file);
-  if (pipe_result < 0) {
-    perror("Failed to create pipe");
+  // Create a FIFO (named pipe) with read/write permission
+  int fifo_result = mkfifo(FIFO_NAME, 0777);
+  if (fifo_result < 0) {
+    perror("Failed to create FIFO");
     exit(EXIT_FAILURE);
   }
 
@@ -244,7 +241,7 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  // Create second thread for `worker1`
+  // Create second thread for `worker2`
   if (pthread_create(&(tids[1]), &attr, &worker2, (void *)(&params)) != 0) {
     perror("Failed to create second thread");
     exit(EXIT_FAILURE);
@@ -261,6 +258,9 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
   }
+
+  // Unlink the FIFO
+  unlink(FIFO_NAME);
 
   return EXIT_SUCCESS;
 }
@@ -279,7 +279,6 @@ void *worker1(void *params) {
 #if DEBUG
     printf("-> CYCLE %d\n", cycle);
 #endif
-
     // Check if any processes arrives at this cycle and add it to the queue
     done = true;
     for (int i = 0; i < NUM_RR_PROCESSES; i++) {
@@ -383,16 +382,60 @@ void *worker1(void *params) {
   avg_turn_around_time /= NUM_RR_PROCESSES;
 #if DEBUG
   printf("\n");
-  printf("Average Wait Time: %f\n", avg_wait_time);
-  printf("Average Turn Around Time: %f\n", avg_turn_around_time);
-  printf("\n");
+  printf("Average Wait Time: %fms\n", avg_wait_time);
+  printf("Average Turn Around Time: %fms\n", avg_turn_around_time);
 #endif
+
+  int fifo_fd = open(FIFO_NAME, O_WRONLY);
+  if (fifo_fd < 0) {
+    perror("Failed to open FIFO with write access");
+    exit(EXIT_FAILURE);
+  }
+
+  write(fifo_fd, &avg_wait_time, sizeof(avg_wait_time));
+  write(fifo_fd, &avg_turn_around_time, sizeof(avg_turn_around_time));
+
+  // Close the FIFO
+  close(fifo_fd);
+  remove(FIFO_NAME);
 
   return NULL;
 }
 
 void *worker2(void *params) {
-  // add your code here
+  thread_params_t *p = params;
+
+  float fifo_avg_wait_time = 0.0;
+  float fifo_avg_turn_around_time = 0.0;
+
+  int fifo_fd = open(FIFO_NAME, O_RDONLY);
+
+  if (fifo_fd < 0) {
+    perror("Failed to open FIFO with read access");
+    exit(EXIT_FAILURE);
+  }
+
+  read(fifo_fd, &fifo_avg_wait_time, sizeof(int));
+  read(fifo_fd, &fifo_avg_turn_around_time, sizeof(int));
+
+#if DEBUG
+  printf("FIFO: Average Wait Time: %fms\n", fifo_avg_wait_time);
+  printf("FIFO: Average Turn Around Time: %fms\n", fifo_avg_turn_around_time);
+#endif
+
+  FILE *output_file;
+  if ((output_file = fopen(p->output_file, "w")) == NULL) {
+    perror("Failed to create/open output file");
+    exit(EXIT_FAILURE);
+  }
+
+  fprintf(output_file, "Average Wait Time: %fms\n", fifo_avg_wait_time);
+  fprintf(output_file, "Average Turn Around Time: %fms\n",
+          fifo_avg_turn_around_time);
+
+  fclose(output_file);
+  close(fifo_fd);
+
   return NULL;
 }
 
