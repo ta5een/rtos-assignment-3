@@ -366,14 +366,15 @@ void *worker1(void *params) {
     cycle++;
   } while (!done);
 
-  float avg_wait_time = 0.0;
-  float avg_turn_around_time = 0.0;
-
 #if DEBUG
   printf("Results:\n\n");
   printf("\tProcess\tArrive\tBurst\tWT\tCT\tTAT\n");
   printf("\t-------\t------\t-----\t--\t--\t---\n");
 #endif
+
+  // Calculate results
+  float avg_wait_time = 0.0;
+  float avg_turn_around_time = 0.0;
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
     rr_process_t *proc = &p->processes[i];
     int turn_around_time = proc->completion_time - proc->arrival_time;
@@ -394,12 +395,14 @@ void *worker1(void *params) {
   printf("Average Turn Around Time: %fms\n", avg_turn_around_time);
 #endif
 
+  // Attemp to open FIFO with write access
   int fifo_fd = open(FIFO_NAME, O_WRONLY);
   if (fifo_fd < 0) {
     perror("Failed to open FIFO with write access");
     exit(EXIT_FAILURE);
   }
 
+  // Write to FIFO
   write(fifo_fd, &avg_wait_time, sizeof(avg_wait_time));
   write(fifo_fd, &avg_turn_around_time, sizeof(avg_turn_around_time));
 
@@ -416,29 +419,34 @@ void *worker2(void *params) {
   float fifo_avg_wait_time = 0.0;
   float fifo_avg_turn_around_time = 0.0;
 
+  // Attemp to open FIFO with read access
   int fifo_fd = open(FIFO_NAME, O_RDONLY);
-
   if (fifo_fd < 0) {
     perror("Failed to open FIFO with read access");
     exit(EXIT_FAILURE);
   }
 
+  // Read from FIFO
   read(fifo_fd, &fifo_avg_wait_time, sizeof(int));
   read(fifo_fd, &fifo_avg_turn_around_time, sizeof(int));
 
+  // Print the results to preview
   printf("FIFO: Average Wait Time: %fms\n", fifo_avg_wait_time);
   printf("FIFO: Average Turn Around Time: %fms\n", fifo_avg_turn_around_time);
 
+  // Attempt to open the output file
   FILE *output_file;
   if ((output_file = fopen(p->output_file, "w")) == NULL) {
     perror("Failed to create/open output file");
     exit(EXIT_FAILURE);
   }
 
+  // Write the average calculations to the output file
   fprintf(output_file, "Average Wait Time: %fms\n", fifo_avg_wait_time);
   fprintf(output_file, "Average Turn Around Time: %fms\n",
           fifo_avg_turn_around_time);
 
+  // Close the output file
   fclose(output_file);
   close(fifo_fd);
 
