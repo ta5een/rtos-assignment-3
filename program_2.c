@@ -19,10 +19,10 @@ based on the assignment 3 requirement. Assignment 3
 #include <unistd.h>
 
 // Number of pagefaults in the program
-int pageFaults = 0;
+int page_faults = 0;
 
 // Function declaration
-void SignalHandler(int signal);
+void signal_handler(int signal);
 
 /**
  * Main routine for the program. In charge of setting up threads and the FIFO.
@@ -32,17 +32,22 @@ void SignalHandler(int signal);
  * @return returns 0 upon completion.
  */
 int main(int argc, char *argv[]) {
-  // Register Ctrl+c(SIGINT) signal and call the signal handler for the
-  // function. add your code here
+  if (argc != 2) {
+    fprintf(stderr, "USAGE: %s number_of_frames \n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  // Register Ctrl+C (SIGINT) signal
+  signal(SIGINT, signal_handler);
 
   int i;
   // reference number
-  int REFERENCESTRINGLENGTH = 24;
+  int REFERENCES_STRING_LEN = 24;
   // Argument from the user on the frame size, such as 4 frames in the document
   int frameSize = atoi(argv[1]);
   // Frame where we will be storing the references. -1 is equivalent to an empty
   // value
-  uint frame[REFERENCESTRINGLENGTH];
+  uint frame[REFERENCES_STRING_LEN];
   // Reference string from the assignment outline
   int referenceString[24] = {7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3,
                              0, 3, 2, 1, 2, 0, 1, 7, 0, 1, 7, 5};
@@ -59,7 +64,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Loop through the reference string values.
-  for (i = 0; i < REFERENCESTRINGLENGTH; i++) {
+  for (i = 0; i < REFERENCES_STRING_LEN; i++) {
     // add your code here
   }
 
@@ -76,8 +81,8 @@ int main(int argc, char *argv[]) {
  *
  * @param signal An integer values for the signal passed to the function.
  */
-void SignalHandler(int signal) {
+void signal_handler(int signal) {
   // add your code
-  printf("\nTotal page faults: %d\n", pageFaults);
+  printf("\nTotal page faults: %d\n", page_faults);
   exit(0);
 }
