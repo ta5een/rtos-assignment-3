@@ -48,22 +48,70 @@ pthread_attr_t attr;
  * Input data for each process.
  */
 typedef struct rr_process_t {
+  // TODO: Only for debug purposes, this may be removed.
   int __pid;
-  /** When does the process arrive (in milliseconds)? */
+  /**
+   * When does the process arrive (in milliseconds)?
+   */
   int arrival_time;
-  /** CPU cycle count for this process to execute (in milliseconds). */
+  /**
+   * CPU cycle count for this process to execute (in milliseconds).
+   */
   int burst_time;
 } rr_process_t;
 
 /**
- * Thread parameters for the Round Robin scheduler.
+ * Thread parameters for the Round Robin (RR) scheduler.
  */
-typedef struct rr_params_t {
+typedef struct thread_params_t {
   int pipe_file[2];
   long int time_quantum;
   rr_process_t processes[NUM_RR_PROCESSES];
   char output_file[OUTPUT_FILE_NAME_LEN];
 } thread_params_t;
+
+/**
+ * Represents the item type of the `rr_queue_t` linked list.
+ *
+ * Essentially, this is a linked list node with a reference to the next node in
+ * the collection.
+ */
+typedef struct rr_queue_node_t {
+  /**
+   * A reference to a process in an array defined somewhere else.
+   *
+   * Must NOT be `NULL`, otherwise this is a logical error.
+   */
+  rr_process_t *process;
+  /**
+   * A reference to the next node.
+   *
+   * May be `NULL` if this node is the last one in the linked list.
+   */
+  struct rr_queue_node_t *next;
+} rr_queue_node_t;
+
+/**
+ * FIFO data collection type used to queue processes in the RR scheduler.
+ *
+ * Essentially, this is a linked list, where the first node represents the
+ * oldest item added to the queue (i.e. the first to arrive), and the last node
+ * represents the newest item added to the queue (i.e. the last to arrive).
+ *
+ * This collection type will constantly update as nodes are dequeued and
+ * enqueued, gradually shifting all the nodes to the start of the queue until
+ * there are no more nodes left to account for.
+ */
+typedef struct rr_queue_t {
+  /**
+   * A reference to the first node in the linked list. May be `NULL`.
+   */
+  rr_queue_node_t *first;
+  /**
+   * A reference to the last node in the linked list. May be `NULL`.
+   */
+  rr_queue_node_t *last;
+} rr_queue_t;
 
 /* --- Prototypes --- */
 
@@ -79,7 +127,39 @@ void *worker1(void *params);
  */
 void *worker2(void *params);
 
-/* --- Main code --- */
+/**
+ * Initializes the queue.
+ */
+void rr_queue_init(rr_queue_t *queue);
+
+/**
+ * Is the queue empty?
+ */
+int rr_queue_is_empty(rr_queue_t *queue);
+
+/**
+ * Adds a new process to the end of the queue.
+ */
+void rr_queue_enqueue(rr_queue_t *queue, rr_process_t *process);
+
+/**
+ * Takes out the next available process (the first one) from the queue.
+ *
+ * The process will be removed from the queue and the rest of the nodes will
+ * "shift" to the start of the queue.
+ *
+ * If the queue is empty, this will return `NULL`.
+ */
+rr_process_t *rr_queue_dequeue(rr_queue_t *queue);
+
+/**
+ * Helper method to print out all the nodes currently in the queue.
+ *
+ * TODO: Only for debug purposes, this may be removed.
+ */
+void rr_queue_print(rr_queue_t *queue);
+
+/* --- Main Code --- */
 
 /**
  * This main function creates named pipe and threads.
@@ -150,70 +230,6 @@ int main(int argc, char *argv[]) {
   }
 
   return EXIT_SUCCESS;
-}
-
-typedef struct rr_queue_node_t {
-  rr_process_t *process;
-  struct rr_queue_node_t *next;
-} rr_queue_node_t;
-
-typedef struct rr_queue_t {
-  rr_queue_node_t *first;
-  rr_queue_node_t *last;
-} rr_queue_t;
-
-void rr_queue_init(rr_queue_t *queue) {
-  queue->first = NULL;
-  queue->last = NULL;
-}
-
-int rr_queue_is_empty(rr_queue_t *queue) {
-  return queue->first == NULL && queue->last == NULL;
-}
-
-void rr_queue_enqueue(rr_queue_t *queue, rr_process_t *process) {
-  rr_queue_node_t *new_node =
-      (rr_queue_node_t *)malloc(sizeof(rr_queue_node_t));
-  new_node->process = process;
-  new_node->next = NULL;
-
-  if (rr_queue_is_empty(queue)) {
-    queue->last = new_node;
-    queue->first = queue->last;
-  } else {
-    queue->last->next = new_node;
-    queue->last = new_node;
-  }
-}
-
-rr_process_t *rr_queue_dequeue(rr_queue_t *queue) {
-  if (rr_queue_is_empty(queue)) {
-    return NULL;
-  }
-
-  rr_queue_node_t *node_to_remove = queue->first;
-  rr_process_t *dequeued_process = node_to_remove->process;
-
-  if (queue->first == queue->last) {
-    // If there is only one node left, unset first and last nodes
-    queue->last = NULL;
-    queue->first = NULL;
-  } else {
-    // Otherwise, set the first node to the second node (i.e. shift the nodes)
-    queue->first = queue->first->next;
-  }
-
-  free(node_to_remove);
-  return dequeued_process;
-}
-
-void rr_queue_print(rr_queue_t *queue) {
-  rr_queue_node_t *peek_node = queue->first;
-  while (peek_node != NULL) {
-    printf("P%d -> ", peek_node->process->__pid);
-    peek_node = peek_node->next;
-  }
-  printf("*\n");
 }
 
 void *worker1(void *params) {
@@ -309,4 +325,60 @@ void *worker1(void *params) {
 void *worker2(void *params) {
   // add your code here
   return NULL;
+}
+
+/* --- RR Queue Methods --- */
+
+void rr_queue_init(rr_queue_t *queue) {
+  queue->first = NULL;
+  queue->last = NULL;
+}
+
+int rr_queue_is_empty(rr_queue_t *queue) {
+  return queue->first == NULL && queue->last == NULL;
+}
+
+void rr_queue_enqueue(rr_queue_t *queue, rr_process_t *process) {
+  rr_queue_node_t *new_node =
+      (rr_queue_node_t *)malloc(sizeof(rr_queue_node_t));
+  new_node->process = process;
+  new_node->next = NULL;
+
+  if (rr_queue_is_empty(queue)) {
+    queue->last = new_node;
+    queue->first = queue->last;
+  } else {
+    queue->last->next = new_node;
+    queue->last = new_node;
+  }
+}
+
+rr_process_t *rr_queue_dequeue(rr_queue_t *queue) {
+  if (rr_queue_is_empty(queue)) {
+    return NULL;
+  }
+
+  rr_queue_node_t *node_to_remove = queue->first;
+  rr_process_t *dequeued_process = node_to_remove->process;
+
+  if (queue->first == queue->last) {
+    // If there is only one node left, unset first and last nodes
+    queue->last = NULL;
+    queue->first = NULL;
+  } else {
+    // Otherwise, set the first node to the second node (i.e. shift the nodes)
+    queue->first = queue->first->next;
+  }
+
+  free(node_to_remove);
+  return dequeued_process;
+}
+
+void rr_queue_print(rr_queue_t *queue) {
+  rr_queue_node_t *peek_node = queue->first;
+  while (peek_node != NULL) {
+    printf("P%d -> ", peek_node->process->__pid);
+    peek_node = peek_node->next;
+  }
+  printf("*\n");
 }
