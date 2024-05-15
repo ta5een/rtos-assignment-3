@@ -360,13 +360,33 @@ void *worker1(void *params) {
     cycle++;
   } while (!done);
 
-  printf("| Proc\t| Arriv\t| Burst\t| Exec\t| LWS\t| WT\t| CT\t|\n");
+  float avg_wait_time = 0.0;
+  float avg_turn_around_time = 0.0;
+
+#if DEBUG
+  printf("Results:\n\n");
+  printf("\tProcess\tArrive\tBurst\tWT\tCT\tTAT\n");
+#endif
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
     rr_process_t *proc = &p->processes[i];
-    printf("| P%d\t| %d\t| %d\t| %d\t| %d\t| %d\t| %d\t|\n", proc->pid,
-           proc->arrival_time, proc->burst_time, proc->exec_time,
-           proc->last_wait_start, proc->wait_time, proc->completion_time);
+    int turn_around_time = proc->completion_time - proc->arrival_time;
+    avg_wait_time += proc->wait_time;
+    avg_turn_around_time += turn_around_time;
+#if DEBUG
+    printf("\tP%d\t%d\t%d\t%d\t%d\t%d\n", proc->pid, proc->arrival_time,
+           proc->burst_time, proc->wait_time, proc->completion_time,
+           turn_around_time);
+#endif
   }
+
+  avg_wait_time /= NUM_RR_PROCESSES;
+  avg_turn_around_time /= NUM_RR_PROCESSES;
+#if DEBUG
+  printf("\n");
+  printf("Average Wait Time: %f\n", avg_wait_time);
+  printf("Average Turn Around Time: %f\n", avg_turn_around_time);
+  printf("\n");
+#endif
 
   return NULL;
 }
