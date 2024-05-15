@@ -24,7 +24,7 @@ based on the assignment 3 requirement. Assignment 3
 /* --- Constants --- */
 
 /** Set to 1 to turn on DEBUG, otherwise set to 0. */
-#define DEBUG 1
+#define DEBUG 0
 
 /** Two threads, one for `worker1` and one for `worker2`. */
 #define NUM_THREADS 2
