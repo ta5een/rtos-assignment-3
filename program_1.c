@@ -47,13 +47,13 @@ pthread_attr_t attr;
 /**
  * Input data for each process.
  */
-typedef struct rr_input_data_t {
+typedef struct rr_process_t {
   int __pid;
   /** When does the process arrive (in milliseconds)? */
   int arrival_time;
   /** CPU cycle count for this process to execute (in milliseconds). */
   int burst_time;
-} rr_input_data_t;
+} rr_process_t;
 
 /**
  * Thread parameters for the Round Robin scheduler.
@@ -61,7 +61,7 @@ typedef struct rr_input_data_t {
 typedef struct rr_params_t {
   int pipe_file[2];
   long int time_quantum;
-  rr_input_data_t rr_input_data[NUM_RR_PROCESSES];
+  rr_process_t processes[NUM_RR_PROCESSES];
   char output_file[OUTPUT_FILE_NAME_LEN];
 } thread_params_t;
 
@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
   thread_params_t params;      // thread parameters
 
   // Initialize input data for Round Robin scheduling simulation
-  rr_input_data_t rr_input_data[NUM_RR_PROCESSES] = {
+  rr_process_t processes[NUM_RR_PROCESSES] = {
       {.__pid = 1, .arrival_time = 8, .burst_time = 10},
       {.__pid = 2, .arrival_time = 10, .burst_time = 3},
       {.__pid = 3, .arrival_time = 14, .burst_time = 7},
@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
   };
 
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-    params.rr_input_data[i] = rr_input_data[i];
+    params.processes[i] = processes[i];
   }
 
   // Create a named pipe (RR) with read/write permission
@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
 }
 
 typedef struct rr_queue_node_t {
-  rr_input_data_t *data;
+  rr_process_t *process;
   struct rr_queue_node_t *next;
 } rr_queue_node_t;
 
@@ -171,10 +171,10 @@ int rr_queue_is_empty(rr_queue_t *queue) {
   return queue->first == NULL && queue->last == NULL;
 }
 
-void rr_queue_enqueue(rr_queue_t *queue, rr_input_data_t *data) {
+void rr_queue_enqueue(rr_queue_t *queue, rr_process_t *process) {
   rr_queue_node_t *new_node =
       (rr_queue_node_t *)malloc(sizeof(rr_queue_node_t));
-  new_node->data = data;
+  new_node->process = process;
   new_node->next = NULL;
 
   if (rr_queue_is_empty(queue)) {
@@ -186,13 +186,13 @@ void rr_queue_enqueue(rr_queue_t *queue, rr_input_data_t *data) {
   }
 }
 
-rr_input_data_t *rr_queue_dequeue(rr_queue_t *queue) {
+rr_process_t *rr_queue_dequeue(rr_queue_t *queue) {
   if (rr_queue_is_empty(queue)) {
     return NULL;
   }
 
   rr_queue_node_t *node_to_remove = queue->first;
-  rr_input_data_t *data = node_to_remove->data;
+  rr_process_t *dequeued_process = node_to_remove->process;
 
   if (queue->first == queue->last) {
     // If there is only one node left, unset first and last nodes
@@ -204,13 +204,13 @@ rr_input_data_t *rr_queue_dequeue(rr_queue_t *queue) {
   }
 
   free(node_to_remove);
-  return data;
+  return dequeued_process;
 }
 
 void rr_queue_print(rr_queue_t *queue) {
   rr_queue_node_t *peek_node = queue->first;
   while (peek_node != NULL) {
-    printf("P%d -> ", peek_node->data->__pid);
+    printf("P%d -> ", peek_node->process->__pid);
     peek_node = peek_node->next;
   }
   printf("*\n");
@@ -228,7 +228,7 @@ void *worker1(void *params) {
   int done = false;
 
   rr_queue_t queue;
-  rr_input_data_t *curr_process = NULL;
+  rr_process_t *curr_process = NULL;
 
   rr_queue_init(&queue);
 
@@ -239,7 +239,7 @@ void *worker1(void *params) {
     printf("Process\tArrival\tBurst\n");
     done = true;
     for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-      rr_input_data_t *curr = &p->rr_input_data[i];
+      rr_process_t *curr = &p->processes[i];
       done = done && curr->burst_time == 0;
       printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
       if (curr->arrival_time == cycle) {
