@@ -58,6 +58,10 @@ typedef struct rr_process_t {
    * CPU cycle count for this process to execute (in milliseconds).
    */
   int burst_time;
+  /**
+   * Number of CPU cycles this process has executed so far.
+   */
+  int exec_time;
 } rr_process_t;
 
 /**
@@ -175,13 +179,13 @@ int main(int argc, char *argv[]) {
 
   // Initialize input data for Round Robin scheduling simulation
   rr_process_t processes[NUM_RR_PROCESSES] = {
-      {.__pid = 1, .arrival_time = 8, .burst_time = 10},
-      {.__pid = 2, .arrival_time = 10, .burst_time = 3},
-      {.__pid = 3, .arrival_time = 14, .burst_time = 7},
-      {.__pid = 4, .arrival_time = 9, .burst_time = 5},
-      {.__pid = 5, .arrival_time = 16, .burst_time = 4},
-      {.__pid = 6, .arrival_time = 21, .burst_time = 6},
-      {.__pid = 7, .arrival_time = 26, .burst_time = 2},
+      {.__pid = 1, .arrival_time = 8, .burst_time = 10, .exec_time = 0},
+      {.__pid = 2, .arrival_time = 10, .burst_time = 3, .exec_time = 0},
+      {.__pid = 3, .arrival_time = 14, .burst_time = 7, .exec_time = 0},
+      {.__pid = 4, .arrival_time = 9, .burst_time = 5, .exec_time = 0},
+      {.__pid = 5, .arrival_time = 16, .burst_time = 4, .exec_time = 0},
+      {.__pid = 6, .arrival_time = 21, .burst_time = 6, .exec_time = 0},
+      {.__pid = 7, .arrival_time = 26, .burst_time = 2, .exec_time = 0},
   };
 
   for (int i = 0; i < NUM_RR_PROCESSES; i++) {
@@ -235,88 +239,70 @@ int main(int argc, char *argv[]) {
 void *worker1(void *params) {
   thread_params_t *p = params;
 
-  // // stdlib function to sort the input data array by the arrival time.
-  // qsort(p->rr_input_data, NUM_RR_PROCESSES, sizeof(rr_input_data_t),
-  //       sort_by_arrive_time);
-
   int cycle = 0;
-  int curr_process_cycle_deadline = 0;
+  int deadline = 0;
   int done = false;
 
   rr_queue_t queue;
   rr_process_t *curr_process = NULL;
 
-  rr_queue_init(&queue);
-
   do {
-    printf(":: CYCLE %d\n", cycle);
+    printf("-> CYCLE %d\n", cycle);
 
-    // Check if there's any new processes right now
-    printf("Process\tArrival\tBurst\n");
+    // Check if any processes arrives at this cycle and add it to the queue
     done = true;
     for (int i = 0; i < NUM_RR_PROCESSES; i++) {
-      rr_process_t *curr = &p->processes[i];
-      done = done && curr->burst_time == 0;
-      printf("P%d\t%d\t%d", i + 1, curr->arrival_time, curr->burst_time);
-      if (curr->arrival_time == cycle) {
-        printf("\t-> ARRIVE\n");
-        rr_queue_enqueue(&queue, curr);
-      } else {
-        printf("\n");
-      }
-    }
-
-    printf(":: ");
-    if (cycle >= curr_process_cycle_deadline || curr_process == NULL) {
-      if (curr_process != NULL && curr_process->burst_time > 0) {
-        // Push back to the queue
-        printf("ENQUEUE(P%d)\t", curr_process->__pid);
+      rr_process_t *curr_process = &p->processes[i];
+      done = done && curr_process->exec_time == curr_process->burst_time;
+      if (curr_process->arrival_time == cycle) {
+        printf("-> ARRIVE(P%d)\n", curr_process->__pid);
         rr_queue_enqueue(&queue, curr_process);
       }
+    }
+
+    if (curr_process == NULL) {
+      // If no process is currently executing, attempt to dequeue the next
+      // process in the queue
       curr_process = rr_queue_dequeue(&queue);
-      if (curr_process == NULL) {
-        printf("EMPTY\t");
-      } else {
-        curr_process_cycle_deadline = cycle + p->time_quantum;
-        printf("DEQUEUE(P%d)\t", curr_process->__pid);
-        printf("DEADLINE(%d)\t", curr_process_cycle_deadline);
+      if (curr_process != NULL) {
+        // Bump the deadline to a maximum of current cycle + time quantum
+        deadline = cycle + p->time_quantum;
+        // printf("-> DEADLINE(%d)\n", deadline);
       }
     }
 
-    // We may or may not have new processes in queue
     if (curr_process != NULL) {
-      printf("CURRENT(P%d)\t", curr_process->__pid);
-      // Decrement the burst time per loop until it doesn't exceed the quantum
-      int new_burst_time = curr_process->burst_time - 1;
-      printf("%d < %d ? %d\t", cycle, curr_process_cycle_deadline,
-             cycle < curr_process_cycle_deadline);
-      if (cycle < curr_process_cycle_deadline && new_burst_time > 0) {
-        printf("DEC(P%d) = %d\t", curr_process->__pid, new_burst_time);
-        curr_process->burst_time--;
-      } else if (new_burst_time <= 0) {
-        curr_process->burst_time = 0;
-        printf("EARLY_DEADLINE(P%d, %d)", curr_process->__pid, cycle);
-        curr_process_cycle_deadline = cycle + 1;
-      } else {
-        curr_process = rr_queue_dequeue(&queue);
-        if (curr_process == NULL) {
-          printf("2_EMPTY\t");
-        } else {
-          curr_process_cycle_deadline = cycle + p->time_quantum;
-          printf("2_DEQUEUE(P%d)\t", curr_process->__pid);
-          printf("2_DEADLINE(%d)\t", curr_process_cycle_deadline);
-        }
+      printf("-> DEADLINE(%d)\n", deadline);
+      printf("[ P%d\t: %d\t: %d\t: %d\t]\n", curr_process->__pid,
+             curr_process->arrival_time, curr_process->burst_time,
+             curr_process->exec_time);
+
+      // Simulate an execution cycle for this process
+      curr_process->exec_time++;
+      printf("-> EXEC(P%d, %d)\n", curr_process->__pid,
+             curr_process->exec_time);
+
+      // Check if the process should be retired or enqueued
+      if (curr_process->exec_time == curr_process->burst_time) {
+        // This process is now completed, it can now be retired
+        printf("-> RETIRE(P%d, %d)\n", curr_process->__pid,
+               curr_process->exec_time);
+        curr_process = NULL;
+      } else if (cycle + 1 == deadline) {
+        // This is the last cycle to execute this process, it should be enqueued
+        // to be completed at a later time
+        printf("-> ENQUEUE(P%d)\n", curr_process->__pid);
+        rr_queue_enqueue(&queue, curr_process);
+        curr_process = NULL;
       }
     }
 
-    printf("\n");
-    printf(":: DEADLINE %d\n", curr_process_cycle_deadline);
+    printf("| Proc\t| Arriv\t| Burst\t| Exec\t|\n");
     rr_queue_print(&queue);
 
-    printf("---------------------\n");
-
+    printf("=================================\n");
     cycle++;
-    sleep(1);
+    // sleep(1);
   } while (!done);
 
   return NULL;
@@ -377,8 +363,10 @@ rr_process_t *rr_queue_dequeue(rr_queue_t *queue) {
 void rr_queue_print(rr_queue_t *queue) {
   rr_queue_node_t *peek_node = queue->first;
   while (peek_node != NULL) {
-    printf("P%d -> ", peek_node->process->__pid);
+    rr_process_t *curr_process = peek_node->process;
+    printf("| P%d\t| %d\t| %d\t| %d\t|\n", curr_process->__pid,
+           curr_process->arrival_time, curr_process->burst_time,
+           curr_process->exec_time);
     peek_node = peek_node->next;
   }
-  printf("*\n");
 }
